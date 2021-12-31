@@ -101,10 +101,28 @@ namespace AppKettle.Controllers
             if(ak.State == KettleState.Standby){
                 await _kettleManager.KettleWake();
                 await Task.Delay(100);
+                ak = _kettleManager.GetAppKettle();
             }
 
             if(ak.State == KettleState.Ready){
                 await _kettleManager.KettleOn();
+            }
+            else{
+                var notReadyProbMsg = "Kettle is not in 'Ready' state";
+                
+                var notReadyProbDetails = new ProblemDetails
+                {
+                    Title = "Kettle Not Ready",
+                    Detail = notReadyProbMsg,
+                    Type = "/error/notready",
+                    Status = 400
+                };
+
+                throw new HttpResponseException
+                {
+                    Status = 400,
+                    Value = notReadyProbDetails
+                };
             }
 
             return _kettleManager.GetAppKettle();// (HttpContext.RequestAborted);
