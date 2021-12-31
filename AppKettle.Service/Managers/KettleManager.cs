@@ -19,6 +19,7 @@ namespace AppKettle.Service.Managers
         private readonly ILogger<KettleManager> _logger;
         private readonly Task _initTask;
         private AppKettle _kettle;
+        private readonly AppConfig _config;
 
         #region Constructors
 
@@ -26,8 +27,9 @@ namespace AppKettle.Service.Managers
         {
             _logger = logger;
 
-            _initTask = InitKettle("255.255.255.255","10.183.2.206","GD0-12900-77ad");
-            //_initTask = InitKettle("10.183.2.255");
+            _config = (AppConfig)config.Get(typeof(AppConfig));
+
+            _initTask = InitKettle(_config.BroadcastIp,_config.KettleIp,_config.KettleImei);
 
             _logger.LogInformation("KettleManager created");
         }

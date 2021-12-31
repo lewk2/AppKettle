@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using AppKettle.Service.Managers;
+using AppKettle.Exceptions;
 
 namespace AppKettle.Controllers
 {
@@ -36,6 +37,77 @@ namespace AppKettle.Controllers
         public bool GetAppKettleDiscovery()
         {
             return _kettleManager.IsKettleDiscovered();// (HttpContext.RequestAborted);
+        }
+
+        [HttpGet]
+        [Route("boil")]
+        public async Task<AppKettle> SimpleBoil()
+        {
+            var ak = _kettleManager.GetAppKettle();
+            if(!ak.Connected){
+                var connProbMsg = "Kettle is not connected";
+                
+                var connProbDetails = new ProblemDetails
+                {
+                    Title = "Kettle Disconnected",
+                    Detail = connProbMsg,
+                    Type = "/error/disconnected",
+                    Status = 400
+                };
+
+                throw new HttpResponseException
+                {
+                    Status = 400,
+                    Value = connProbDetails
+                };
+            }
+
+            if(ak.Volume < 200){
+                var volProbMsg = "Kettle does not have enough water";
+                
+                var volProbDetails = new ProblemDetails
+                {
+                    Title = "Kettle Disconnected",
+                    Detail = volProbMsg,
+                    Type = "/error/needswater",
+                    Status = 400
+                };
+
+                throw new HttpResponseException
+                {
+                    Status = 400,
+                    Value = volProbDetails
+                };
+            }
+
+            if(ak.State == KettleState.NotOnBase){
+                var noKettleProbMsg = "Kettle is not on the base";
+                
+                var noKettleProbDetails = new ProblemDetails
+                {
+                    Title = "Kettle Missing",
+                    Detail = noKettleProbMsg,
+                    Type = "/error/nokettle",
+                    Status = 400
+                };
+
+                throw new HttpResponseException
+                {
+                    Status = 400,
+                    Value = noKettleProbDetails
+                };
+            }
+
+            if(ak.State == KettleState.Standby){
+                await _kettleManager.KettleWake();
+                await Task.Delay(100);
+            }
+
+            if(ak.State == KettleState.Ready){
+                await _kettleManager.KettleOn();
+            }
+
+            return _kettleManager.GetAppKettle();// (HttpContext.RequestAborted);
         }
 
         [HttpPost]

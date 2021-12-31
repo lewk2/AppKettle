@@ -28,15 +28,17 @@
             }
         }
 
-        public bool Discovered { get; set; }
+        public bool Discovered { get; private set; }
 
         public string KettleIp { get { return _kettleIpAddress.ToString(); } }
 
-        public string Imei { get; set; }
+        public string Imei { get; private set; }
 
-        public int CurrentTemp { get; set; }
+        public int CurrentTemp { get; private set; }
 
-        public int Volume { get; set; }
+        public int Volume { get; private set; }
+
+        public DateTime StatusTime {get; private set;}
 
         public KettleState State { get; private set; }
 
@@ -46,7 +48,6 @@
 
             if (!string.IsNullOrEmpty(ipAddress))
             {
-                Console.WriteLine("Bypassing kettle discovery with explicit IP & IMEI");
                 var ak = new AppKettle
                 {
                     _kettleIpAddress = IPAddress.Parse(ipAddress),
@@ -62,7 +63,6 @@
 
             while(!kettleTask.IsCompleted) {
                 await SendUdpDatagram(broadcastAddress, port, "Probe#2020-05-05-10-47-15-2");
-                Console.WriteLine("Pinging kettle discovery...");
                 await Task.Delay(1000);
             }
 
@@ -119,7 +119,6 @@
             var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
             var len = jsonBytes.Length;
             var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-            Console.WriteLine(Encoding.UTF8.GetString(byteSend));
 
             await _socketStream.WriteAsync(byteSend);
             await _socketStream.FlushAsync();
@@ -146,8 +145,6 @@
             var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
             var len = jsonBytes.Length;
             var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-            Console.WriteLine(Encoding.UTF8.GetString(byteSend));
-
             await _socketStream.WriteAsync(byteSend);
             await _socketStream.FlushAsync();
         }
@@ -173,7 +170,6 @@
             var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
             var len = jsonBytes.Length;
             var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-            Console.WriteLine(Encoding.UTF8.GetString(byteSend));
 
             await _socketStream.WriteAsync(byteSend);
             await _socketStream.FlushAsync();
@@ -248,8 +244,8 @@
                                 CurrentTemp = statMsg.CurrentTemp;
                                 Volume = statMsg.WaterVolumeMl;
                                 State = statMsg.State;
+                                StatusTime = DateTime.UtcNow;
                             }
-
                         }
                     }
                     catch(Exception ex)
@@ -276,8 +272,6 @@
                 {
                     var keepAliveString = "##000bKeepConnect&&";
                     var keepAliveBytes = Encoding.UTF8.GetBytes(keepAliveString);
-                    Console.WriteLine("Oh,oh,oh,oh...");
-
                     await _socketStream.WriteAsync(keepAliveBytes);
                     await _socketStream.FlushAsync();
                 }
@@ -305,7 +299,6 @@
             var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
             var len = jsonBytes.Length;
             var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-            Console.WriteLine(Encoding.UTF8.GetString(byteSend));
 
             await _socketStream.WriteAsync(byteSend);
             await _socketStream.FlushAsync();

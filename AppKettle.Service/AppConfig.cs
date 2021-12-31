@@ -24,6 +24,11 @@ namespace AppKettle
 
         public SwaggerSettings Swagger { get; set; }
         
+        public string BroadcastIp { get; set; } = "255.255.255.255";
+        
+        public string KettleIp { get; set; }
+
+        public string KettleImei { get; set; }
 
         #endregion
     }
