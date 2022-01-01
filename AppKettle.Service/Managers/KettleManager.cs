@@ -100,6 +100,14 @@ namespace AppKettle.Service.Managers
             return true;
         }
 
+        public async Task<bool> KettleQuery()
+        {
+            if (_kettle == null) return false;
+
+            await _kettle.Query();
+
+            return true;
+        }
 
         #endregion
 

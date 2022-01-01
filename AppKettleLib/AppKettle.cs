@@ -200,6 +200,7 @@
         private async Task ReadMessages()
         {
             var buffer = new byte[_tcpClient.ReceiveBufferSize];
+            var readBytes = 0;
             while (true)
             {
                 while (_tcpClient?.Connected == true)
@@ -208,9 +209,9 @@
                     {
                         try
                         {
-                            var readBytes = await _socketStream.ReadAsync(buffer, 0, _tcpClient.ReceiveBufferSize);
+                            readBytes = await _socketStream.ReadAsync(buffer, 0, _tcpClient.ReceiveBufferSize);
+                            
                             string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
-
                             var msgs = msgString.Split("&&");
                             foreach (var msg in msgs)
                             {
@@ -233,7 +234,9 @@
                         catch (Exception ex)
                         {
                             _logger.LogError($"Kettle connection socket exception: {ex.Message}");
-                            return;
+                            string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
+                            _logger.LogWarning($"MSG: {msgString}");
+                            break;
                         }
                     }
 

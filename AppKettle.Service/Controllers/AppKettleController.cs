@@ -49,10 +49,10 @@ namespace AppKettle.Controllers
                 else
                 {
                     _logger.LogInformation($"Waiting for kettle to update status ({waitCount++})");
-                    await ak.Query();
+                    await _kettleManager.KettleQuery();
                 }
 
-                await Task.Delay(100);
+                await Task.Delay(500);
                 if (waitCount > stateTimeout)
                 {
                     var connProbMsg = "Kettle is unresponsive";
@@ -90,6 +90,11 @@ namespace AppKettle.Controllers
         public async Task<AppKettle> SimpleBoil()
         {
             var ak = _kettleManager.GetAppKettle();
+
+            if((ak.State == KettleState.Heating) || (ak.State == KettleState.KeepWarm)){
+                return ak;
+            }
+
             if(!ak.Connected){
                 var connProbMsg = "Kettle is not connected";
                 
@@ -146,7 +151,9 @@ namespace AppKettle.Controllers
 
             if(ak.State == KettleState.Standby){
                 await _kettleManager.KettleWake();
+                await _kettleManager.KettleQuery();
                 await Task.Delay(100);
+                
                 ak = _kettleManager.GetAppKettle();
             }
 
@@ -155,7 +162,7 @@ namespace AppKettle.Controllers
             while(ak.State != KettleState.Ready)
             {
                 _logger.LogInformation($"Waiting for kettle to become ready to boil ({waitCount++})");
-
+                await _kettleManager.KettleQuery();
                 await Task.Delay(1000);
 
                 if (waitCount > stateTimeout)

@@ -144,10 +144,4 @@ namespace AppKettle
             return byteMsg;
         }
     }
-
-
-    public static class AppKettleByteMessage
-    {
-
-    }
 }

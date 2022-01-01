@@ -44,17 +44,6 @@ namespace AppKettle
 
     }
 
-    public struct AppKettleStatus
-    {
-
-        public AppKettleStatus(byte[] data)
-        {
-
-        }
-
-    
-    }
-
     public enum KettleCmd
     {
         STAT = 0x36,
