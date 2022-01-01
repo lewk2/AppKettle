@@ -26,11 +26,57 @@ namespace AppKettle.Controllers
 
         [HttpGet]
         [Route("")]
-        public AppKettle GetAppKettleStatus()
+        public async Task<AppKettle> GetAppKettleStatus()
         {
-            return _kettleManager.GetAppKettle();// (HttpContext.RequestAborted);
-        }
+            var ak = _kettleManager.GetAppKettle();
 
+            var waitCount = 1;
+            var stateTimeout = 30;
+            while (DateTime.UtcNow.Subtract(_kettleManager.GetAppKettle().StatusTime) > TimeSpan.FromSeconds(5))
+            {
+                if (!ak.Connected)
+                {
+                    if(ak.Discovered == false && string.IsNullOrEmpty(ak.KettleIp)){
+                        _logger.LogInformation($"Waiting for kettle to be discovered ({waitCount++})");
+                        await Task.Delay(1000);
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Waiting for kettle to connect ({waitCount++})");
+                        await ak.Connect();
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"Waiting for kettle to update status ({waitCount++})");
+                    await ak.Query();
+                }
+
+                await Task.Delay(100);
+                if (waitCount > stateTimeout)
+                {
+                    var connProbMsg = "Kettle is unresponsive";
+
+                    var connProbDetails = new ProblemDetails
+                    {
+                        Title = "Kettle Unresponsive",
+                        Detail = connProbMsg,
+                        Type = "/error/unresponsive",
+                        Status = 400
+                    };
+
+                    throw new HttpResponseException
+                    {
+                        Status = 400,
+                        Value = connProbDetails
+                    };
+                }
+                
+            }
+
+            return _kettleManager.GetAppKettle();// (HttpContext.RequestAborted);
+
+        }
 
         [HttpGet]
         [Route("discovered")]
@@ -104,26 +150,35 @@ namespace AppKettle.Controllers
                 ak = _kettleManager.GetAppKettle();
             }
 
-            if(ak.State == KettleState.Ready){
-                await _kettleManager.KettleOn();
-            }
-            else{
-                var notReadyProbMsg = "Kettle is not in 'Ready' state";
-                
-                var notReadyProbDetails = new ProblemDetails
-                {
-                    Title = "Kettle Not Ready",
-                    Detail = notReadyProbMsg,
-                    Type = "/error/notready",
-                    Status = 400
-                };
+            var waitCount = 1;
+            var stateTimeout = 30;
+            while(ak.State != KettleState.Ready)
+            {
+                _logger.LogInformation($"Waiting for kettle to become ready to boil ({waitCount++})");
 
-                throw new HttpResponseException
+                await Task.Delay(1000);
+
+                if (waitCount > stateTimeout)
                 {
-                    Status = 400,
-                    Value = notReadyProbDetails
-                };
+                    var notReadyProbMsg = "Kettle is not in 'Ready' state";
+
+                    var notReadyProbDetails = new ProblemDetails
+                    {
+                        Title = "Kettle Not Ready",
+                        Detail = notReadyProbMsg,
+                        Type = "/error/notready",
+                        Status = 400
+                    };
+
+                    throw new HttpResponseException
+                    {
+                        Status = 400,
+                        Value = notReadyProbDetails
+                    };
+                }
             }
+
+            await _kettleManager.KettleOn();
 
             return _kettleManager.GetAppKettle();// (HttpContext.RequestAborted);
         }

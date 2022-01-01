@@ -30,6 +30,7 @@ namespace AppKettle.Service.Managers
             _config = (AppConfig)config.Get(typeof(AppConfig));
 
             _initTask = InitKettle(_config.BroadcastIp,_config.KettleIp,_config.KettleImei);
+            Task.Delay(1000);
 
             _logger.LogInformation("KettleManager created");
         }
@@ -105,7 +106,8 @@ namespace AppKettle.Service.Managers
         #region Private Members
         private async Task InitKettle(string broadcastAddress, string kettleIp = "", string kettleImei = "")
         {
-            _kettle = await AppKettle.DiscoverKettle(broadcastAddress,kettleIp,kettleImei);
+            _kettle = new AppKettle(_logger);
+            await _kettle.DiscoverKettle(broadcastAddress,kettleIp,kettleImei);
 
             await _kettle.Connect();
         }

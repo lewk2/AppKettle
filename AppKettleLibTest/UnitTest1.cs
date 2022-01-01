@@ -45,16 +45,16 @@ namespace AppKettleLibTest
         [TestCase(MyInitStatus1, KettleCmd.INIT)]
         public void TestMessageDecoding(string message, KettleCmd expectedCommand,bool encrypted = false)
         {
-            var akMsg = AppKettleMessageFactory.GetMessage(message, encrypted);
+            var akMsg = AppKettleMessageFactory.GetHexMessage(message, encrypted);
 
             if(akMsg.Command != expectedCommand)
             {
                 Assert.Fail();
             }
 
-            if(akMsg is AppKettleStatusMessage)
+            if(akMsg is AppKettleStatusHexMessage)
             {
-                var akStatusMsg = akMsg as AppKettleStatusMessage;
+                var akStatusMsg = akMsg as AppKettleStatusHexMessage;
                 Console.WriteLine($"Kettle {akStatusMsg.State}, {akStatusMsg.CurrentTemp}C with {akStatusMsg.WaterVolumeMl}ml");
             }
 
@@ -68,7 +68,7 @@ namespace AppKettleLibTest
         [TestCase(Status2)]
         public void ValidateChecksum(string message)
         {
-            var calculatedSum = AppKettleMessage.CalculateChecksum(message,true);
+            var calculatedSum = AppKettleHexMessage.CalculateChecksum(message,true);
             if(calculatedSum != Convert.FromHexString(message)[^1])
             {
                 Assert.Fail("Checksum validation failure");

@@ -8,6 +8,7 @@
     using System;
     using System.Text.Json;
     using System.Threading;
+    using Microsoft.Extensions.Logging;
 
     public class AppKettle
     {
@@ -15,22 +16,29 @@
         private NetworkStream _socketStream;
         private StreamReader _socketReader;
         private StreamWriter _socketWriter;
+        private ILogger _logger;
         private Task _readingTask;
         private Task _keepAliveTask;
-        private ushort _sequence = 0;
         private IPAddress _kettleIpAddress { get; set; }
         private PeriodicTimer _timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+
+        public AppKettle(ILogger logger)
+        {
+            _logger = logger;
+            _logger.LogInformation("AppKettle Created");
+        }
 
         public bool Connected {
             get
             {
+                if (_tcpClient == null) return false;
                 return _tcpClient.Connected;
             }
         }
 
         public bool Discovered { get; private set; }
 
-        public string KettleIp { get { return _kettleIpAddress.ToString(); } }
+        public string KettleIp { get { return _kettleIpAddress?.ToString(); } }
 
         public string Imei { get; private set; }
 
@@ -42,38 +50,36 @@
 
         public KettleState State { get; private set; }
 
-        public static async Task<AppKettle> DiscoverKettle(string broadcastAddress, string ipAddress = "", string imei = "")
+        public async Task DiscoverKettle(string broadcastAddress, string ipAddress = "", string imei = "")
         {
             var port = 15103;
 
             if (!string.IsNullOrEmpty(ipAddress))
             {
-                var ak = new AppKettle
-                {
-                    _kettleIpAddress = IPAddress.Parse(ipAddress),
-                    Imei = imei,
-                    Discovered = true
-                };
-
-                return ak;
+                _logger.LogInformation($"Kettle has configured IP address ({ipAddress}) with IMEI set to {imei} - bypassing discovery.");
+                _kettleIpAddress = IPAddress.Parse(ipAddress);
+                Imei = imei;
+                Discovered = false;
+                return;
             }
-
 
             var kettleTask = ListenForKettle(port);
 
-            while(!kettleTask.IsCompleted) {
+            _logger.LogInformation($"Kettle has configured discovery broadcast address ({broadcastAddress}) - using this for announcement request.");
+
+            while (!kettleTask.IsCompleted) {
                 await SendUdpDatagram(broadcastAddress, port, "Probe#2020-05-05-10-47-15-2");
                 await Task.Delay(1000);
             }
 
-            return await kettleTask;
+            return;
         }
 
         public async Task Connect()
         {
-            if (!Discovered)
+            if (!Discovered && string.IsNullOrEmpty(KettleIp))
             {
-                throw new InvalidOperationException("Cannot connect to an undiscovered kettle");
+                throw new InvalidOperationException("Cannot connect to an undiscovered or unconfigured kettle");
             }
 
             _tcpClient = new TcpClient();
@@ -83,9 +89,11 @@
             _socketWriter = new StreamWriter(_socketStream);
 
             _readingTask = ReadMessages();
-            await GetStatus();
+            await Query();
             _keepAliveTask = KeepAlive();
-        
+
+            _logger.LogInformation($"AppKettle connected on IP {_kettleIpAddress}");
+
         }
 
         public void Disconnect()
@@ -102,90 +110,65 @@
         {
             if (!Connected)
             {
-                throw new InvalidOperationException("Cannot command an kettle while not connected");
+                throw new InvalidOperationException("Cannot command a kettle while not connected");
             }
 
-            var kettleWakeString = $"AA000D00000000000003B7{(_sequence++):X2}410000";
-
-            var kettleWakeStringWithSum = $"{kettleWakeString}{AppKettleMessage.CalculateChecksum(kettleWakeString):X2}".ToLowerInvariant();
-
-            var akRequest = new AppKettleJsonRequestMessage
-            {
-                data2 = kettleWakeStringWithSum,
-                imei = Imei
-            };
-
-            var requestJson = JsonSerializer.Serialize(akRequest);
-            var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
-            var len = jsonBytes.Length;
-            var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-
-            await _socketStream.WriteAsync(byteSend);
+            _logger.LogInformation("Reqesting kettle wakes");
+            await _socketStream.WriteAsync(AppKettleMessageFactory.GetKettleWakeByteMessage(Imei));
             await _socketStream.FlushAsync();
+            await Query();
         }
 
         public async Task Off()
         {
             if (!Connected)
             {
-                throw new InvalidOperationException("Cannot command an kettle while not connected");
+                throw new InvalidOperationException("Cannot command a kettle while not connected");
             }
 
-            var kettleWakeString = $"AA000D00000000000003B7{(_sequence++):X2}3A0000";
-
-            var kettleWakeStringWithSum = $"{kettleWakeString}{AppKettleMessage.CalculateChecksum(kettleWakeString):X2}".ToLowerInvariant();
-
-            var akRequest = new AppKettleJsonRequestMessage
-            {
-                data2 = kettleWakeStringWithSum,
-                imei = Imei
-            };
-
-            var requestJson = JsonSerializer.Serialize(akRequest);
-            var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
-            var len = jsonBytes.Length;
-            var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-            await _socketStream.WriteAsync(byteSend);
+            _logger.LogInformation("Reqesting kettle turn off");
+            await _socketStream.WriteAsync(AppKettleMessageFactory.GetKettleOffByteMessage(Imei));
             await _socketStream.FlushAsync();
+            await Query();
         }
 
-        public async Task On(int targetTemp = 100, int keepWarmMins = 5)
+        public async Task On(int TargetTemp = 100, int KeepWarmMins = 5)
         {
             if (!Connected)
             {
-                throw new InvalidOperationException("Cannot command an kettle while not connected");
+                throw new InvalidOperationException("Cannot command a kettle while not connected");
             }
 
-            var kettleOnString = $"AA001200000000000003B7{(_sequence++):X2}39000000{targetTemp:X2}{keepWarmMins:X2}0000";
+            _logger.LogInformation("Reqesting kettle turn on");
+            await _socketStream.WriteAsync(AppKettleMessageFactory.GetKettleOnByteMessage(Imei, TargetTemp, KeepWarmMins));
+            await _socketStream.FlushAsync();
+            await Query();
+        }
 
-            var kettleOnStringWithSum = $"{kettleOnString}{AppKettleMessage.CalculateChecksum(kettleOnString):X2}".ToLowerInvariant();
-
-            var akRequest = new AppKettleJsonRequestMessage
+        public async Task Query()
+        {
+            if (!Connected)
             {
-                data2 = kettleOnStringWithSum,
-                imei = Imei
-            };
+                throw new InvalidOperationException("Cannot command a kettle while not connected");
+            }
 
-            var requestJson = JsonSerializer.Serialize(akRequest);
-            var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
-            var len = jsonBytes.Length;
-            var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-
-            await _socketStream.WriteAsync(byteSend);
+            _logger.LogInformation("Reqesting kettle update status");
+            await _socketStream.WriteAsync(AppKettleMessageFactory.GetKettleStatusByteMessage(Imei));
             await _socketStream.FlushAsync();
         }
 
-        private static async Task SendUdpDatagram(string address, int Port, string Message)
+        private async Task SendUdpDatagram(string address, int Port, string Message)
         {
             var ipAddress = IPAddress.Parse(address);
             var IpEndPoint = new IPEndPoint(ipAddress, Port);
             var Socket = new UdpClient();
             var EncodedText = Encoding.UTF8.GetBytes(Message);
+            _logger.LogInformation("Sending announcement UDP broadcast message - kettle should reply");
             await Socket.SendAsync(EncodedText, EncodedText.Length, IpEndPoint);
             Socket.Close();
         }
 
-        private static async Task<AppKettle> ListenForKettle(int networkPort)
+        private async Task ListenForKettle(int networkPort)
         {
             var localEp = new IPEndPoint(IPAddress.Any, networkPort);
             var udpClient = new UdpClient();
@@ -204,16 +187,12 @@
                     var elements = receiveString.Split('#');
                     if (elements.Length > 4 && elements[1] == "123456")
                     {
-                        var ak = new AppKettle
-                        {
-                            _kettleIpAddress = udpResponse.RemoteEndPoint.Address,
-                            Imei = elements[0],
-                            Discovered = true
-                        };
-
-                        return ak;
+                        _kettleIpAddress = udpResponse.RemoteEndPoint.Address;
+                        Imei = elements[0];
+                        Discovered = true;
+                       
+                        return;
                     }
-
                 }
             }
         }
@@ -221,41 +200,54 @@
         private async Task ReadMessages()
         {
             var buffer = new byte[_tcpClient.ReceiveBufferSize];
-            while (_tcpClient.Connected)
+            while (true)
             {
-                while (_socketStream.DataAvailable)
+                while (_tcpClient?.Connected == true)
                 {
-                    try
+                    while (_socketStream.DataAvailable)
                     {
-                        var readBytes = await _socketStream.ReadAsync(buffer, 0, _tcpClient.ReceiveBufferSize);
-                        string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
-
-                        var msgs = msgString.Split("&&");
-                        foreach (var msg in msgs)
+                        try
                         {
-                            if (string.IsNullOrWhiteSpace(msg)) continue;
-                            if (!msg.Substring(6).StartsWith("{")) continue;
-                            var jsonMsg = JsonSerializer.Deserialize<AppKettleJsonResponseMessage>(msg.Substring(6));
-                            var akMsg = AppKettleMessageFactory.GetMessage(jsonMsg.data3, false);
-                            var statMsg = akMsg as AppKettleStatusMessage;
-                            
-                            if (statMsg != null)
+                            var readBytes = await _socketStream.ReadAsync(buffer, 0, _tcpClient.ReceiveBufferSize);
+                            string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
+
+                            var msgs = msgString.Split("&&");
+                            foreach (var msg in msgs)
                             {
-                                CurrentTemp = statMsg.CurrentTemp;
-                                Volume = statMsg.WaterVolumeMl;
-                                State = statMsg.State;
-                                StatusTime = DateTime.UtcNow;
+                                if (string.IsNullOrWhiteSpace(msg)) continue;
+                                if (!msg.Substring(6).StartsWith("{")) continue;
+                                var jsonMsg = JsonSerializer.Deserialize<AppKettleJsonResponseMessage>(msg.Substring(6));
+                                var akMsg = AppKettleMessageFactory.GetHexMessage(jsonMsg.data3, false);
+                                var statMsg = akMsg as AppKettleStatusHexMessage;
+
+                                if (statMsg != null)
+                                {
+                                    CurrentTemp = statMsg.CurrentTemp;
+                                    Volume = statMsg.WaterVolumeMl;
+                                    State = statMsg.State;
+                                    StatusTime = DateTime.UtcNow;
+                                    _logger.LogInformation($"Status: {State} - {CurrentTemp}C, {Volume}ml");
+                                }
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError($"Kettle connection socket exception: {ex.Message}");
+                            return;
+                        }
                     }
-                    catch(Exception ex)
-                    {
-                        Console.WriteLine($"Closed socket {ex.Message}");
-                        return;
-                    }
+
+                    await Task.Delay(100);
                 }
 
-                await Task.Delay(100);
+                _logger.LogWarning("Disconnected from kettle... will retry connection in 5 seconds...");
+                await Task.Delay(5000);
+
+                _tcpClient = new TcpClient();
+                await _tcpClient.ConnectAsync(_kettleIpAddress, 6002);
+                _socketStream = _tcpClient.GetStream();
+                _socketReader = new StreamReader(_socketStream);
+                _socketWriter = new StreamWriter(_socketStream);
             }
         }
 
@@ -270,38 +262,23 @@
             {
                 if (Connected)
                 {
-                    var keepAliveString = "##000bKeepConnect&&";
-                    var keepAliveBytes = Encoding.UTF8.GetBytes(keepAliveString);
-                    await _socketStream.WriteAsync(keepAliveBytes);
-                    await _socketStream.FlushAsync();
+                    try
+                    {
+                        var keepAliveString = "##000bKeepConnect&&";
+                        var keepAliveBytes = Encoding.UTF8.GetBytes(keepAliveString);
+                        await _socketStream.WriteAsync(keepAliveBytes);
+                        await _socketStream.FlushAsync();
+                    }
+                    catch(Exception ex)
+                    {
+                        _logger.LogWarning($"Cannot send keep alive - exception while sending: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Cannot send keep alive - connection is closed");
                 }
             }
-        }
-
-        private async Task GetStatus()
-        {
-            if (!Connected)
-            {
-                throw new InvalidOperationException("Cannot command an kettle while not connected");
-            }
-
-            var kettleStatusString = $"AA000D00000000000003B7{(_sequence++):X2}360000";
-
-            var kettleStatusStringWithSum = $"{kettleStatusString}{AppKettleMessage.CalculateChecksum(kettleStatusString):X2}".ToLowerInvariant();
-
-            var akRequest = new AppKettleJsonRequestMessage
-            {
-                data2 = kettleStatusStringWithSum,
-                imei = Imei
-            };
-
-            var requestJson = JsonSerializer.Serialize(akRequest);
-            var jsonBytes = Encoding.UTF8.GetBytes(requestJson);
-            var len = jsonBytes.Length;
-            var byteSend = Encoding.UTF8.GetBytes($"##00{len:X2}{requestJson}&&");
-
-            await _socketStream.WriteAsync(byteSend);
-            await _socketStream.FlushAsync();
         }
 
     }
