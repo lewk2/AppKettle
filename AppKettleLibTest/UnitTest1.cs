@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using AppKettle;
 using System;
+using System.Text.Json;
 using System.Runtime.InteropServices;
 
 namespace AppKettleLibTest
@@ -37,6 +38,13 @@ namespace AppKettleLibTest
         [SetUp]
         public void Setup()
         {
+            // var serviceProvider = new ServiceCollection()
+            //     .AddLogging()
+            //     .BuildServiceProvider();
+
+            // var factory = serviceProvider.GetService<ILoggerFactory>();
+
+            // var logger = factory.CreateLogger<BlogController>();
         }
 
         [TestCase(CompleteStatus)]
@@ -51,7 +59,7 @@ namespace AppKettleLibTest
                 if (string.IsNullOrWhiteSpace(msg)) continue;
                 
                 if (msg.Length < 12 ){
-                    _logger.LogWarning($"Unusually short message: {msg}");
+                    // _logger.LogWarning($"Unusually short message: {msg}");
                     Assert.Fail();
                 }
 
@@ -63,15 +71,16 @@ namespace AppKettleLibTest
 
                 if (statMsg != null)
                 {
-                    CurrentTemp = statMsg.CurrentTemp;
-                    Volume = statMsg.WaterVolumeMl;
-                    State = statMsg.State;
-                    StatusTime = DateTime.UtcNow;
-                    _logger.LogInformation($"Status: {State} - {CurrentTemp}C, {Volume}ml");
+                    Assert.Pass();
+                    // CurrentTemp = statMsg.CurrentTemp;
+                    // Volume = statMsg.WaterVolumeMl;
+                    // State = statMsg.State;
+                    // StatusTime = DateTime.UtcNow;
+                    // _logger.LogInformation($"Status: {State} - {CurrentTemp}C, {Volume}ml");
                 }
             }
 
-            Assert.Pass();
+            Assert.Fail();
         }
 
         [TestCase(KettleOn, KettleCmd.K_ON)]

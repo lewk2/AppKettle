@@ -209,9 +209,11 @@
                 {
                     while (_socketStream.DataAvailable)
                     {
-                        try
-                        {
+                        // try
+                        // {
+                            buffer = new byte[_tcpClient.ReceiveBufferSize];
                             readBytes = await _socketStream.ReadAsync(buffer, 0, _tcpClient.ReceiveBufferSize);
+                            
                             if(readBytes < 1)
                             {
                                 _logger.LogWarning("Zero bytes read during ReadAsync call... resetting connection");
@@ -247,14 +249,14 @@
                                     _logger.LogInformation($"Status: {State} - {CurrentTemp}C, {Volume}ml");
                                 }
                             }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError($"Kettle connection socket exception: {ex.Message} (ReadBytes: {readBytes})");
-                            string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
-                            _logger.LogWarning($"MSG: {msgString}");
-                            break;
-                        }
+                        // }
+                        // catch (Exception ex)
+                        // {
+                        //     _logger.LogError($"Kettle connection socket exception: {ex.Message} (ReadBytes: {readBytes})");
+                        //     string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
+                        //     _logger.LogWarning($"MSG: {msgString}");
+                        //     break;
+                        // }
                     }
 
                     await Task.Delay(100);
