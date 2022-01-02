@@ -200,6 +200,8 @@
         private async Task ReadMessages()
         {
             var buffer = new byte[_tcpClient.ReceiveBufferSize];
+            _logger.LogInformation($"ReceiveBufferSize: {buffer.Length}");
+
             var readBytes = 0;
             while (true)
             {
@@ -217,11 +219,21 @@
                             }
                             
                             string msgString = Encoding.UTF8.GetString(buffer[0..readBytes]);
+                            if(!msgString.Contains("&&")) continue;
                             var msgs = msgString.Split("&&");
+                            if(msgs==null) continue;
                             foreach (var msg in msgs)
                             {
+                                //some message sanity checking
                                 if (string.IsNullOrWhiteSpace(msg)) continue;
+                                
+                                if (msg.Length < 12 ){
+                                    _logger.LogWarning($"Unusually short message: {msg}");
+                                    continue;
+                                }
+
                                 if (!msg.Substring(6).StartsWith("{")) continue;
+
                                 var jsonMsg = JsonSerializer.Deserialize<AppKettleJsonResponseMessage>(msg.Substring(6));
                                 var akMsg = AppKettleMessageFactory.GetHexMessage(jsonMsg.data3, false);
                                 var statMsg = akMsg as AppKettleStatusHexMessage;

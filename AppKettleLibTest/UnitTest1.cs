@@ -32,10 +32,46 @@ namespace AppKettleLibTest
         public const string KettleOn = "AA001200000000000003B70c390000006402000088"; // kettle on
         public const string KettOnLk = "AA001200000000000003B79E39000000640F0000E9"; // kettle on
         public const string KettleOff = "AA000D00000000000003B7283A0000d6"; // kettle off
-
+        public const string CompleteStatus = "##0083{\"wifi_cmd\":\"62\",\"imei\":\"GD0-12900-77ad\",\"data3\":\"aa0018030000000000000004360000c8000200003764051b000025\",\"suc\":\"00\",\"seq\":\"54545\"}&&";
+        
         [SetUp]
         public void Setup()
         {
+        }
+
+        [TestCase(CompleteStatus)]
+        public void TestFullMessageDecoding(string msgString)
+        {
+            if(!msgString.Contains("&&")) Assert.Fail();
+            var msgs = msgString.Split("&&");
+            if(msgs==null) Assert.Fail();
+            foreach (var msg in msgs)
+            {
+                //some message sanity checking
+                if (string.IsNullOrWhiteSpace(msg)) continue;
+                
+                if (msg.Length < 12 ){
+                    _logger.LogWarning($"Unusually short message: {msg}");
+                    Assert.Fail();
+                }
+
+                if (!msg.Substring(6).StartsWith("{")) Assert.Fail();
+
+                var jsonMsg = JsonSerializer.Deserialize<AppKettleJsonResponseMessage>(msg.Substring(6));
+                var akMsg = AppKettleMessageFactory.GetHexMessage(jsonMsg.data3, false);
+                var statMsg = akMsg as AppKettleStatusHexMessage;
+
+                if (statMsg != null)
+                {
+                    CurrentTemp = statMsg.CurrentTemp;
+                    Volume = statMsg.WaterVolumeMl;
+                    State = statMsg.State;
+                    StatusTime = DateTime.UtcNow;
+                    _logger.LogInformation($"Status: {State} - {CurrentTemp}C, {Volume}ml");
+                }
+            }
+
+            Assert.Pass();
         }
 
         [TestCase(KettleOn, KettleCmd.K_ON)]
