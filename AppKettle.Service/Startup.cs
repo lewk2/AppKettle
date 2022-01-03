@@ -93,13 +93,13 @@ namespace AppKettle
             if (config.Swagger?.Enabled == true)
             {
                 // Enable middleware to serve generated Swagger as a JSON endpoint.
-                app.UseSwagger(c => { c.RouteTemplate = "/cms/swagger/{documentname}/swagger.json"; });
+                app.UseSwagger(c => { c.RouteTemplate = "/kettle/swagger/{documentname}/swagger.json"; });
 
                 // Enable middleware to serve swagger-ui (HTML, JS, CSS, etc.),
                 // specifying the Swagger JSON endpoint.
                 app.UseSwaggerUI(c =>
                 {
-                    c.SwaggerEndpoint("/cms/swagger/v1/swagger.json", "AppKettle Service API V1");
+                    c.SwaggerEndpoint("/kettle/swagger/v1/swagger.json", "AppKettle Service API V1");
                     c.RoutePrefix = "kettle";
                 });
             }

@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  kettle:
+    image: appkettle:latest
+    ports:
+        - 5000:5000
+    environment:
+        LEWKIRKAPPKETTLE_KettleIp: '10.183.2.206'
+        LEWKIRKAPPKETTLE_KettleImei: 'GD0-12900-77ad'
+    deploy:
+      labels:
+        - traefik.enable=true  
+        - traefik.http.routers.kettle.tls=true
+        - traefik.http.routers.kettle.tls.certresolver=myresolver
+        - traefik.http.routers.kettle.entrypoints=webSecure
+        - traefik.http.routers.kettle.rule=(Host(`lewis.cinegy.com`) && PathPrefix(`/kettle`))
+        - traefik.http.routers.kettle.service=kettle
+        - traefik.http.services.kettle.loadbalancer.server.port=5000
+        - traefik.docker.network=traefik-public
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    networks:
+      traefik-public:
+
+# You'll need to create an network with the overlay driver
+# ~$ docker network create --driver overlay --attachable traefik-public
+networks:
+  traefik-public:
+    external: true
