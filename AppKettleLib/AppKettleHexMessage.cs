@@ -20,26 +20,31 @@ namespace AppKettle
 
         public static byte CalculateChecksum(string message, bool includesSum = false)
         {
-            byte[] msgBytes;
+            try{
+                byte[] msgBytes;
 
-            if (includesSum)
-            {
-                msgBytes = Convert.FromHexString(message)[1..^1];
+                if (includesSum)
+                {
+                    msgBytes = Convert.FromHexString(message)[1..^1];
+                }
+                else
+                {
+                    msgBytes = Convert.FromHexString(message)[1..];
+                }
+
+                var sum = 0x0;
+                for (var i = 0; i < msgBytes.Length; i++)
+                {
+                    sum += msgBytes[i];
+                }
+
+                var checksum = (byte)(0xFF - (sum % 256));
+
+                return checksum;
             }
-            else
-            {
-                msgBytes = Convert.FromHexString(message)[1..];
+            catch(Exception ex) {
+                throw new InvalidOperationException($"Exception calculating checksum with input message, {message}",ex);
             }
-
-            var sum = 0x0;
-            for (var i = 0; i < msgBytes.Length; i++)
-            {
-                sum += msgBytes[i];
-            }
-
-            var checksum = (byte)(0xFF - (sum % 256));
-
-            return checksum;
         }
 
     }

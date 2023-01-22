@@ -294,6 +294,8 @@
                     catch(Exception ex)
                     {
                         _logger.LogWarning($"Cannot send keep alive - exception while sending: {ex.Message}");
+                        _logger.LogInformation($"Attempting to reconnect...");
+                        await ConnectAsync();
                     }
                 }
                 else

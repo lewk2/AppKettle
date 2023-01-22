@@ -114,6 +114,8 @@ namespace AppKettle
             {
                 endpoints.MapControllers();
             });
+
+            logger.LogInformation("DEBUG BUILD TO SHOW SEQ OVERFLOW");
         }
 
         public static OpenApiInfo CreateOpenApiInfo()

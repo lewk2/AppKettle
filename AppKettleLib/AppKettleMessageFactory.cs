@@ -9,7 +9,7 @@ namespace AppKettle
 {
     public static class AppKettleMessageFactory
     {
-        private static ushort _sequence = 0;
+        private static byte _sequence = 0;
 
         public static byte[] GetKettleStatusByteMessage(string imei)
         {
